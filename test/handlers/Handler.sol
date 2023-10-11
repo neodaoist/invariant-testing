@@ -3,11 +3,19 @@ pragma solidity 0.8.16;
 
 import {WETH9} from "../../src/WETH9.sol";
 
+import {ActorSet, LibActorSet} from "./LibActorSet.sol";
+
 import {CommonBase} from "forge-std/Base.sol";
 import {StdCheats} from "forge-std/StdCheats.sol";
 import {StdUtils} from "forge-std/StdUtils.sol";
 
 contract Handler is CommonBase, StdCheats, StdUtils {
+    //
+    using LibActorSet for ActorSet;
+
+    ActorSet private _actors;
+    address private currentActor;
+
     WETH9 private weth;
 
     uint256 public ghost_depositSum;
@@ -15,35 +23,69 @@ contract Handler is CommonBase, StdCheats, StdUtils {
 
     uint256 public constant ETH_SUPPLY = 120_250_000 ether;
 
+    modifier createActor() {
+        currentActor = msg.sender;
+        _actors.add(msg.sender);
+        _;
+    }
+
     constructor(WETH9 _weth) {
         weth = _weth;
         deal(address(this), ETH_SUPPLY);
     }
 
-    function deposit(uint256 amount) public {
+    function deposit(uint256 amount) public createActor {
         amount = bound(amount, 0, address(this).balance);
+        _pay(currentActor, amount);
 
+        vm.prank(currentActor);
         weth.deposit{value: amount}();
 
         ghost_depositSum += amount;
     }
 
-    function withdraw(uint256 amount) public {
-        amount = bound(amount, 0, weth.balanceOf(address(this)));
+    function withdraw(uint256 amount) public createActor {
+        amount = bound(amount, 0, weth.balanceOf(currentActor)); // TODO propose fix
 
+        vm.startPrank(currentActor);
         weth.withdraw(amount);
+        _pay(address(this), amount);
+        vm.stopPrank();
 
         ghost_withdrawSum += amount;
     }
 
-    function sendFallback(uint256 amount) public {
+    function sendFallback(uint256 amount) public createActor {
         amount = bound(amount, 0, address(this).balance);
+        _pay(currentActor, amount);
 
-        (bool success, ) = address(weth).call{value: amount}("");
+        vm.prank(currentActor);
+        (bool success,) = address(weth).call{value: amount}("");
         require(success, "sendFallback failed");
 
         ghost_depositSum += amount;
     }
 
     receive() external payable {}
+
+    //////
+
+    function actors() external view returns (address[] memory) {
+        return _actors.addrs;
+    }
+
+    function forEachActor(function(address) external func) public {
+        _actors.forEach(func); // TODO propose fix
+    }
+
+    function reduceActors(uint256 acc, function(uint256,address) external returns (uint256) func) public returns (uint256) {
+        return _actors.reduce(acc, func);
+    }
+
+    //////
+
+    function _pay(address to, uint256 amount) private {
+        (bool success,) = to.call{value: amount}("");
+        require(success, "pay() failed");
+    }
 }
