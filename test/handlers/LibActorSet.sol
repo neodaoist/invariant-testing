@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.16;
+pragma solidity 0.8.19;
 
 struct ActorSet {
     address[] addrs;
@@ -28,7 +28,10 @@ library LibActorSet {
         }
     }
 
-    function reduce(ActorSet storage s, uint256 acc, function(uint256,address) external returns (uint256) func) internal returns (uint256) {
+    function reduce(ActorSet storage s, uint256 acc, function(uint256,address) external returns (uint256) func)
+        internal
+        returns (uint256)
+    {
         for (uint256 i = 0; i < s.addrs.length; ++i) {
             acc = func(acc, s.addrs[i]);
         }

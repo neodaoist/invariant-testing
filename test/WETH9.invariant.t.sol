@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.16;
+pragma solidity 0.8.19;
 
 import {Test} from "forge-std/Test.sol";
 import {Handler} from "./handlers/Handler.sol";
@@ -19,12 +19,7 @@ contract WETH9InvariantTest is Test {
         selectors[1] = Handler.withdraw.selector;
         selectors[2] = Handler.sendFallback.selector;
 
-        targetSelector(
-            FuzzSelector({
-                addr: address(handler),
-                selectors: selectors
-            })
-        );
+        targetSelector(FuzzSelector({addr: address(handler), selectors: selectors}));
         targetContract(address(handler));
     }
 
@@ -41,9 +36,21 @@ contract WETH9InvariantTest is Test {
         assertEq(address(weth).balance, sumOfBalances);
     }
 
+    function invariant_depositorBalances() public {
+        handler.forEachActor(this.assertAccountBalanceLteTotalSupply);
+    }
+
+    function invariant_callSummary() public view {
+        handler.callSummary();
+    }
+
     //////
 
     function accumulateBalance(uint256 balance, address caller) external view returns (uint256) {
         return balance + weth.balanceOf(caller);
+    }
+
+    function assertAccountBalanceLteTotalSupply(address account) external {
+        assertLe(weth.balanceOf(account), weth.totalSupply());
     }
 }
